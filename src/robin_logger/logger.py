@@ -7,8 +7,8 @@ import json
 import time
 import threading
 import asyncio
-from typing import Any, Dict, Optional
-from datetime import datetime
+from typing import Any, Dict, Optional, Union
+from datetime import datetime, timezone
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -122,6 +122,35 @@ class RobinLogger:
         
         return session
     
+    def _normalize_timestamp(self, ts: Optional[Union[str, int, float, datetime]]) -> str:
+        """
+        Normaliza el timestamp al formato "YYYY-MM-DD HH:MM:SS" (UTC).
+
+        Acepta:
+        - None: usa la hora actual en UTC
+        - datetime: lo convierte a UTC sin tz y lo formatea
+        - int/float (epoch segundos): convierte a UTC
+        - str: si ya viene en string, lo devuelve tal cual (se asume correcto)
+        """
+        fmt = "%Y-%m-%d %H:%M:%S"
+        try:
+            if ts is None:
+                return datetime.utcnow().strftime(fmt)
+            if isinstance(ts, datetime):
+                # Si tiene tz, convertir a UTC y quitar tzinfo para formateo
+                if ts.tzinfo is not None:
+                    # Convertir a UTC y luego quitar tzinfo
+                    ts = ts.astimezone(timezone.utc).replace(tzinfo=None)
+                return ts.strftime(fmt)
+            if isinstance(ts, (int, float)):
+                return datetime.utcfromtimestamp(ts).strftime(fmt)
+            if isinstance(ts, str):
+                # Confiamos en que el usuario proporciona el formato deseado
+                return ts
+        except Exception:
+            # Fallback robusto
+            return datetime.utcnow().strftime(fmt)
+
     def _prepare_payload(
         self,
         type: str,
@@ -129,11 +158,10 @@ class RobinLogger:
         subcategory: str,
         level: str,
         data: Dict[str, Any],
-        timestamp: Optional[str] = None
+        timestamp: Optional[Union[str, int, float, datetime]] = None
     ) -> Dict[str, Any]:
         """Prepara el payload para enviar al API."""
-        if timestamp is None:
-            timestamp = datetime.utcnow().isoformat() + "Z"
+        normalized_ts = self._normalize_timestamp(timestamp)
         
         return {
             "type": type,
@@ -141,7 +169,7 @@ class RobinLogger:
             "subcategory": subcategory,
             "level": level,
             "data": data,
-            "timestamp": timestamp
+            "timestamp": normalized_ts,
         }
     
     def _send_to_api(self, payload: Dict[str, Any]) -> bool:
@@ -154,7 +182,7 @@ class RobinLogger:
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.api_key}",
-            "User-Agent": "robin-logger-python/0.1.0"
+            "User-Agent": "robin-logger-python/0.2.2"
         }
         
         try:

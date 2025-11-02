@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "robin-logger"
-version = "0.2.1"
+version = "0.2.2"
 description = "Sistema de logging centralizado con retry automático, cache local y reintentos automáticos en background"
 readme = "README.md"
 authors = [
